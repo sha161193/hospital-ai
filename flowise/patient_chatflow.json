@@ -1,0 +1,389 @@
+{
+  "nodes": [
+
+    {
+      "id": "chatOpenAI_0",
+      "position": { "x": 100, "y": 100 },
+      "type": "customNode",
+      "data": {
+        "id": "chatOpenAI_0",
+        "label": "ChatOpenAI",
+        "name": "chatOpenAI",
+        "version": 6,
+        "type": "ChatOpenAI",
+        "baseClasses": ["ChatOpenAI", "BaseChatModel", "BaseLanguageModel"],
+        "category": "Chat Models",
+        "inputs": {
+          "modelName": "gpt-4o",
+          "temperature": 0,
+          "streaming": true
+        },
+        "outputAnchors": [{
+          "id": "chatOpenAI_0-output",
+          "name": "chatOpenAI",
+          "label": "ChatOpenAI",
+          "type": "ChatOpenAI | BaseChatModel | BaseLanguageModel"
+        }]
+      }
+    },
+
+    {
+      "id": "bufferMemory_0",
+      "position": { "x": 100, "y": 280 },
+      "type": "customNode",
+      "data": {
+        "id": "bufferMemory_0",
+        "label": "Buffer Memory",
+        "name": "bufferMemory",
+        "version": 2,
+        "type": "BufferMemory",
+        "baseClasses": ["BufferMemory", "BaseChatMemory", "BaseMemory"],
+        "category": "Memory",
+        "inputs": {
+          "sessionId": "",
+          "memoryKey": "chat_history"
+        },
+        "outputAnchors": [{
+          "id": "bufferMemory_0-output",
+          "name": "bufferMemory",
+          "label": "Buffer Memory",
+          "type": "BufferMemory | BaseChatMemory | BaseMemory"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_triage",
+      "position": { "x": 500, "y": 100 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_triage",
+        "label": "Symptom Triage Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "assess_symptoms",
+          "description": "Assesses patient-reported symptoms and returns a triage urgency level: EMERGENCY (go to ER immediately), URGENT (urgent care within hours), or ROUTINE (schedule with primary care). Also detects crisis keywords like chest pain, suicidal ideation, severe bleeding, difficulty breathing, stroke symptoms. Use this whenever a patient describes any symptom or health concern.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"symptoms\": {\n      \"type\": \"string\",\n      \"description\": \"Full description of all symptoms the patient has reported in this conversation\"\n    },\n    \"duration\": {\n      \"type\": \"string\",\n      \"description\": \"How long the patient has had these symptoms, e.g. '2 hours', '3 days'\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\"mild\", \"moderate\", \"severe\", \"unknown\"],\n      \"description\": \"Overall severity as reported or inferred\"\n    },\n    \"age\": {\n      \"type\": \"number\",\n      \"description\": \"Patient age if known, otherwise 0\"\n    }\n  },\n  \"required\": [\"symptoms\", \"severity\"]\n}",
+          "func": "// ============================================================\n// SYMPTOM TRIAGE TOOL\n// ============================================================\nconst EMERGENCY_KEYWORDS = [\n  'chest pain','chest tightness','heart attack','cardiac arrest',\n  'difficulty breathing','can\\'t breathe','shortness of breath',\n  'stroke','face drooping','arm weakness','speech difficulty',\n  'suicidal','want to die','kill myself','end my life','self harm',\n  'severe bleeding','uncontrolled bleeding','coughing blood','vomiting blood',\n  'seizure','unconscious','passed out','anaphylaxis','allergic reaction',\n  'severe allergic','overdose','poisoning','choking','drowning'\n];\n\nconst URGENT_KEYWORDS = [\n  'high fever','fever above 39','fever above 103','severe headache',\n  'sudden vision','eye pain','ear pain','urinary pain',\n  'abdominal pain','vomiting','diarrhea','rash','swelling',\n  'back pain','joint pain','dizziness','fainting'\n];\n\nconst symptomText = (symptoms || '').toLowerCase();\n\n// Check for EMERGENCY\nconst isEmergency = EMERGENCY_KEYWORDS.some(k => symptomText.includes(k)) || severity === 'severe';\nif (isEmergency) {\n  return JSON.stringify({\n    urgency: 'EMERGENCY',\n    action: 'Call 911 or go to the nearest Emergency Room immediately.',\n    crisis: true,\n    message: '🚨 EMERGENCY DETECTED. This patient requires IMMEDIATE emergency care.',\n    care_setting: 'Emergency Room (ER)',\n    disclaimer: 'This is an AI-generated triage assessment and is NOT a substitute for professional medical advice.'\n  });\n}\n\n// Check for URGENT\nconst isUrgent = URGENT_KEYWORDS.some(k => symptomText.includes(k)) || severity === 'moderate';\nif (isUrgent) {\n  return JSON.stringify({\n    urgency: 'URGENT',\n    action: 'Visit an urgent care center or contact your doctor within the next few hours.',\n    crisis: false,\n    message: 'These symptoms require prompt medical attention today.',\n    care_setting: 'Urgent Care or Primary Care (same day)',\n    disclaimer: 'This is an AI-generated triage assessment and is NOT a substitute for professional medical advice.'\n  });\n}\n\n// ROUTINE\nreturn JSON.stringify({\n  urgency: 'ROUTINE',\n  action: 'Schedule an appointment with your primary care physician.',\n  crisis: false,\n  message: 'These symptoms can be addressed with a routine appointment.',\n  care_setting: 'Primary Care or Telehealth',\n  disclaimer: 'This is an AI-generated triage assessment and is NOT a substitute for professional medical advice.'\n});"
+        },
+        "outputAnchors": [{
+          "id": "tool_triage-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_appointments",
+      "position": { "x": 500, "y": 320 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_appointments",
+        "label": "Appointment Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "manage_appointment",
+          "description": "Book, reschedule, or cancel a patient appointment. Also retrieves available slots. Use this when the patient wants to schedule, change, or cancel a visit, or asks about availability.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\",\n      \"enum\": [\"book\", \"reschedule\", \"cancel\", \"get_slots\"],\n      \"description\": \"The appointment action to perform\"\n    },\n    \"patient_id\": {\n      \"type\": \"string\",\n      \"description\": \"Patient ID if available from EHR lookup\"\n    },\n    \"department\": {\n      \"type\": \"string\",\n      \"description\": \"Medical department, e.g. Cardiology, General Practice, Pediatrics\"\n    },\n    \"preferred_date\": {\n      \"type\": \"string\",\n      \"description\": \"Preferred appointment date in YYYY-MM-DD format\"\n    },\n    \"appointment_id\": {\n      \"type\": \"string\",\n      \"description\": \"Existing appointment ID for reschedule or cancel actions\"\n    },\n    \"reason\": {\n      \"type\": \"string\",\n      \"description\": \"Brief reason for the appointment\"\n    }\n  },\n  \"required\": [\"action\"]\n}",
+          "func": "// ============================================================\n// APPOINTMENT MANAGEMENT TOOL — calls your Custom EHR REST API\n// ============================================================\nconst baseUrl = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey  = $vars.EHR_API_KEY || 'dev-key';\n\nconst headers = {\n  'Content-Type': 'application/json',\n  'x-api-key': apiKey\n};\n\ntry {\n  if (action === 'get_slots') {\n    const res = await fetch(`${baseUrl}/appointments/slots?department=${encodeURIComponent(department||'General')}&date=${preferred_date||''}`, { headers });\n    const data = await res.json();\n    if (!data.slots || data.slots.length === 0) return 'No available slots found for the requested date and department. Please try a different date.';\n    const slotList = data.slots.map(s => `• ${s.time} — Dr. ${s.doctor} (${s.department})`).join('\\n');\n    return `Available appointment slots:\\n${slotList}`;\n  }\n\n  if (action === 'book') {\n    const res = await fetch(`${baseUrl}/appointments/book`, {\n      method: 'POST', headers,\n      body: JSON.stringify({ patient_id, department, preferred_date, reason })\n    });\n    const data = await res.json();\n    return `✅ Appointment booked!\\n📅 Date: ${data.date}\\n🕐 Time: ${data.time}\\n👨‍⚕️ Doctor: Dr. ${data.doctor}\\n🏥 Department: ${data.department}\\n🔖 Confirmation: ${data.confirmation_id}\\n\\nYou will receive a reminder 24 hours before your appointment.`;\n  }\n\n  if (action === 'reschedule') {\n    const res = await fetch(`${baseUrl}/appointments/${appointment_id}/reschedule`, {\n      method: 'PUT', headers,\n      body: JSON.stringify({ preferred_date })\n    });\n    const data = await res.json();\n    return `✅ Appointment rescheduled!\\n📅 New date: ${data.date}\\n🕐 New time: ${data.time}\\n🔖 Updated confirmation: ${data.confirmation_id}`;\n  }\n\n  if (action === 'cancel') {\n    const res = await fetch(`${baseUrl}/appointments/${appointment_id}/cancel`, {\n      method: 'DELETE', headers\n    });\n    const data = await res.json();\n    return `✅ Appointment ${appointment_id} has been cancelled. ${data.message || ''}`;\n  }\n\n  return 'Unknown action. Please specify: book, reschedule, cancel, or get_slots.';\n\n} catch (err) {\n  return `Appointment service temporarily unavailable. Please call our front desk or try again shortly. Error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_appointments-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_ehr",
+      "position": { "x": 500, "y": 540 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_ehr",
+        "label": "EHR Lookup Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "lookup_patient_ehr",
+          "description": "Looks up patient medical history, recent test results, lab results, imaging, prescriptions, and upcoming visits from the EHR. ONLY call this after the patient has authenticated. Never expose raw records — summarise clearly.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"patient_id\": {\n      \"type\": \"string\",\n      \"description\": \"Authenticated patient ID\"\n    },\n    \"record_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"summary\", \"lab_results\", \"medications\", \"appointments\", \"imaging\", \"discharge_notes\"],\n      \"description\": \"Which type of record to retrieve\"\n    }\n  },\n  \"required\": [\"patient_id\", \"record_type\"]\n}",
+          "func": "// ============================================================\n// EHR LOOKUP TOOL — Generic REST API\n// ============================================================\nconst baseUrl = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey  = $vars.EHR_API_KEY || 'dev-key';\n\ntry {\n  const res = await fetch(`${baseUrl}/patients/${patient_id}/records/${record_type}`, {\n    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' }\n  });\n\n  if (res.status === 401) return 'Authentication required. Please verify your identity before accessing medical records.';\n  if (res.status === 404) return 'No records found for this patient. Please contact the front desk if you believe this is an error.';\n  if (!res.ok) return `Unable to retrieve ${record_type} at this time. Please try again or contact support.`;\n\n  const data = await res.json();\n\n  // Format based on type\n  if (record_type === 'lab_results' && data.results) {\n    const labs = data.results.map(r =>\n      `• ${r.test_name}: ${r.value} ${r.unit} (${r.status === 'normal' ? '✅ Normal' : '⚠️ Abnormal'}) — ${r.date}`\n    ).join('\\n');\n    return `Recent lab results for your records:\\n${labs}\\n\\nPlease discuss any abnormal results with your doctor.`;\n  }\n\n  if (record_type === 'medications' && data.medications) {\n    const meds = data.medications.map(m =>\n      `• ${m.name} ${m.dosage} — ${m.frequency} (prescribed by Dr. ${m.prescriber})`\n    ).join('\\n');\n    return `Your current medications:\\n${meds}\\n\\nFor refill requests, please let me know.`;\n  }\n\n  if (record_type === 'summary') {\n    return `Patient Summary:\\n• Name: ${data.name}\\n• DOB: ${data.dob}\\n• Blood type: ${data.blood_type}\\n• Allergies: ${data.allergies?.join(', ') || 'None recorded'}\\n• Conditions: ${data.conditions?.join(', ') || 'None recorded'}\\n• Last visit: ${data.last_visit}`;\n  }\n\n  return JSON.stringify(data, null, 2);\n\n} catch (err) {\n  return `Unable to access medical records. Please try again or contact the hospital directly. Error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_ehr-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_prescription",
+      "position": { "x": 500, "y": 760 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_prescription",
+        "label": "Prescription Refill Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "request_prescription_refill",
+          "description": "Submit a prescription refill request on behalf of the patient. Routes to the prescribing doctor for approval. Use when patient asks for a medication refill.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"patient_id\": { \"type\": \"string\" },\n    \"medication_name\": { \"type\": \"string\", \"description\": \"Name of the medication to refill\" },\n    \"pharmacy_name\": { \"type\": \"string\", \"description\": \"Patient's preferred pharmacy\" },\n    \"notes\": { \"type\": \"string\", \"description\": \"Any additional notes for the doctor\" }\n  },\n  \"required\": [\"patient_id\", \"medication_name\"]\n}",
+          "func": "const baseUrl = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey  = $vars.EHR_API_KEY || 'dev-key';\n\ntry {\n  const res = await fetch(`${baseUrl}/prescriptions/refill`, {\n    method: 'POST',\n    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ patient_id, medication_name, pharmacy_name, notes })\n  });\n  const data = await res.json();\n  return `✅ Refill request submitted for ${medication_name}.\\n📋 Request ID: ${data.request_id}\\n👨‍⚕️ Sent to: Dr. ${data.prescriber}\\n⏱️ Expected response: ${data.estimated_hours || 24} hours\\n💊 Pharmacy: ${pharmacy_name || 'On file'}`;\n} catch (err) {\n  return `Unable to submit refill request. Please call your pharmacy or doctor directly. Error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_prescription-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_billing",
+      "position": { "x": 500, "y": 940 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_billing",
+        "label": "Billing & Insurance Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "check_billing_insurance",
+          "description": "Retrieve billing statements, check insurance coverage, and answer billing questions. Use when the patient asks about invoices, outstanding balances, insurance, or coverage.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"patient_id\": { \"type\": \"string\" },\n    \"query_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"balance\", \"invoice\", \"insurance_coverage\", \"payment_plan\"],\n      \"description\": \"Type of billing query\"\n    },\n    \"invoice_id\": { \"type\": \"string\", \"description\": \"Specific invoice ID if applicable\" }\n  },\n  \"required\": [\"patient_id\", \"query_type\"]\n}",
+          "func": "const baseUrl = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey  = $vars.EHR_API_KEY || 'dev-key';\n\ntry {\n  const endpoint = invoice_id\n    ? `${baseUrl}/billing/${patient_id}/invoice/${invoice_id}`\n    : `${baseUrl}/billing/${patient_id}/${query_type}`;\n\n  const res = await fetch(endpoint, {\n    headers: { 'x-api-key': apiKey }\n  });\n  const data = await res.json();\n\n  if (query_type === 'balance') {\n    return `💳 Account Balance\\n• Outstanding: $${data.outstanding}\\n• Due date: ${data.due_date}\\n• Last payment: $${data.last_payment} on ${data.last_payment_date}\\n\\nTo pay online, visit our patient portal or call billing at ext. 4200.`;\n  }\n  if (query_type === 'insurance_coverage') {\n    return `🏥 Insurance Summary\\n• Provider: ${data.insurer}\\n• Plan: ${data.plan_name}\\n• Policy #: ${data.policy_number}\\n• Deductible: $${data.deductible} (met: $${data.deductible_met})\\n• Copay: $${data.copay}\\n• In-network: ${data.in_network ? 'Yes ✅' : 'No ❌'}`;\n  }\n  return JSON.stringify(data, null, 2);\n} catch (err) {\n  return `Unable to retrieve billing information. Please contact our billing department at ext. 4200. Error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_billing-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_whatsapp",
+      "position": { "x": 900, "y": 100 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_whatsapp",
+        "label": "WhatsApp Notification Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "send_whatsapp_notification",
+          "description": "Send a WhatsApp message to the patient — use for appointment confirmations, reminders, lab result notifications, and urgent follow-ups. Always confirm before sending.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"to\": { \"type\": \"string\", \"description\": \"Patient phone with country code, e.g. +911234567890\" },\n    \"message_type\": { \"type\": \"string\", \"enum\": [\"appointment_confirmation\", \"appointment_reminder\", \"lab_ready\", \"general\"], \"description\": \"Type of notification\" },\n    \"message\": { \"type\": \"string\", \"description\": \"The message to send\" }\n  },\n  \"required\": [\"to\", \"message\"]\n}",
+          "func": "const accountSid = $vars.TWILIO_ACCOUNT_SID;\nconst authToken  = $vars.TWILIO_AUTH_TOKEN;\nconst fromNumber = $vars.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';\n\nconst credentials = btoa(`${accountSid}:${authToken}`);\nconst body = new URLSearchParams({\n  From: fromNumber,\n  To: `whatsapp:${to}`,\n  Body: `🏥 City General Hospital\\n\\n${message}\\n\\n⚠️ This message is from an AI assistant. For emergencies, call 911.`\n});\n\ntry {\n  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {\n    method: 'POST',\n    headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: body.toString()\n  });\n  const data = await res.json();\n  if (data.sid) return `✅ WhatsApp notification sent successfully. (SID: ${data.sid})`;\n  return `Failed to send WhatsApp: ${JSON.stringify(data)}`;\n} catch (err) {\n  return `WhatsApp service error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_whatsapp-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_telegram",
+      "position": { "x": 900, "y": 280 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_telegram",
+        "label": "Telegram Notification Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "send_telegram_notification",
+          "description": "Send a Telegram message to the patient — use for appointment confirmations, reminders, and notifications. Always confirm before sending.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"chat_id\": { \"type\": \"string\", \"description\": \"Patient's Telegram chat ID\" },\n    \"message\": { \"type\": \"string\", \"description\": \"Message text to send\" }\n  },\n  \"required\": [\"chat_id\", \"message\"]\n}",
+          "func": "const botToken = $vars.TELEGRAM_BOT_TOKEN;\ntry {\n  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      chat_id: chat_id,\n      text: `🏥 *City General Hospital*\\n\\n${message}\\n\\n_⚠️ AI assistant message. For emergencies, call 911._`,\n      parse_mode: 'Markdown'\n    })\n  });\n  const data = await res.json();\n  if (data.ok) return `✅ Telegram notification sent successfully.`;\n  return `Failed to send Telegram: ${data.description}`;\n} catch (err) {\n  return `Telegram service error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_telegram-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_email",
+      "position": { "x": 900, "y": 460 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_email",
+        "label": "Email Notification Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "send_email_notification",
+          "description": "Send an email to the patient — appointment confirmations, discharge instructions, lab results, billing statements. Always confirm before sending.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"to_email\": { \"type\": \"string\", \"description\": \"Patient email address\" },\n    \"subject\": { \"type\": \"string\", \"description\": \"Email subject\" },\n    \"body\": { \"type\": \"string\", \"description\": \"Email body in plain text\" },\n    \"email_type\": { \"type\": \"string\", \"enum\": [\"appointment\", \"lab_results\", \"discharge\", \"billing\", \"general\"] }\n  },\n  \"required\": [\"to_email\", \"subject\", \"body\"]\n}",
+          "func": "const sendgridKey = $vars.SENDGRID_API_KEY;\nconst fromEmail   = $vars.HOSPITAL_FROM_EMAIL || 'noreply@citygeneralhospital.com';\nconst fromName    = 'City General Hospital';\n\ntry {\n  const res = await fetch('https://api.sendgrid.com/v3/mail/send', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${sendgridKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      personalizations: [{ to: [{ email: to_email }] }],\n      from: { email: fromEmail, name: fromName },\n      subject: subject,\n      content: [{\n        type: 'text/html',\n        value: `<div style='font-family:Arial,sans-serif;max-width:600px;margin:auto;'>\n          <div style='background:#005A8E;color:white;padding:20px;border-radius:8px 8px 0 0'>\n            <h2 style='margin:0'>🏥 City General Hospital</h2>\n          </div>\n          <div style='padding:24px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px'>\n            <p>${body.replace(/\\n/g, '<br>')}</p>\n            <hr style='border:none;border-top:1px solid #eee;margin:20px 0'>\n            <p style='font-size:12px;color:#666'>\n              ⚠️ This message was generated by an AI assistant. It is not a substitute for professional medical advice.<br>\n              For emergencies, call 911 immediately.\n            </p>\n          </div>\n        </div>`\n      }]\n    })\n  });\n  if (res.status === 202) return `✅ Email sent successfully to ${to_email}.`;\n  const err = await res.text();\n  return `Failed to send email: ${err}`;\n} catch (err) {\n  return `Email service error: ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_email-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_handoff",
+      "position": { "x": 900, "y": 640 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_handoff",
+        "label": "Human Handoff Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "escalate_to_human",
+          "description": "Escalate this conversation to a live human agent or clinical staff. Use when: (1) patient explicitly asks for a human, (2) crisis/emergency detected, (3) question is too complex or sensitive for AI, (4) patient seems distressed. This is always available to the patient.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"reason\": { \"type\": \"string\", \"description\": \"Reason for escalation: emergency, patient_request, complex_clinical, billing_dispute, other\" },\n    \"priority\": { \"type\": \"string\", \"enum\": [\"emergency\", \"high\", \"normal\"], \"description\": \"Escalation priority\" },\n    \"summary\": { \"type\": \"string\", \"description\": \"Brief summary of the conversation context to pass to the human agent\" },\n    \"department\": { \"type\": \"string\", \"description\": \"Department to route to: ER, Clinical, Billing, Reception\" }\n  },\n  \"required\": [\"reason\", \"priority\"]\n}",
+          "func": "const baseUrl  = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey   = $vars.EHR_API_KEY || 'dev-key';\nconst ticketId = 'TKT-' + Date.now();\n\ntry {\n  await fetch(`${baseUrl}/handoff`, {\n    method: 'POST',\n    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },\n    body: JSON.stringify({ ticket_id: ticketId, reason, priority, summary, department, timestamp: new Date().toISOString() })\n  });\n} catch(e) { /* continue even if API call fails */ }\n\nif (priority === 'emergency') {\n  return `🚨 EMERGENCY ESCALATION INITIATED\\n\\nTicket: ${ticketId}\\n\\nIf you are experiencing a life-threatening emergency:\\n📞 CALL 911 IMMEDIATELY\\n\\nFor the hospital emergency line: Call (555) 000-0000\\n\\nA staff member has been notified and will contact you shortly.`;\n}\n\nreturn `✅ Handing you over to our team.\\n\\n📋 Ticket: ${ticketId}\\n🏥 Department: ${department || 'Reception'}\\n⏱️ Expected wait: ${priority === 'high' ? '2-5 minutes' : '5-10 minutes'}\\n\\nA staff member will join this conversation or call you shortly. You can also call us directly at (555) 000-0000.`;"
+        },
+        "outputAnchors": [{
+          "id": "tool_handoff-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "tool_audit",
+      "position": { "x": 900, "y": 820 },
+      "type": "customNode",
+      "data": {
+        "id": "tool_audit",
+        "label": "Audit Log Tool",
+        "name": "customTool",
+        "type": "CustomTool",
+        "baseClasses": ["CustomTool", "Tool", "StructuredTool"],
+        "category": "Tools",
+        "inputs": {
+          "name": "write_audit_log",
+          "description": "Writes an audit log entry for HIPAA compliance. Automatically called after any action involving PHI (protected health information): EHR access, lab result disclosure, prescription actions, billing queries.",
+          "schema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"action\": { \"type\": \"string\", \"description\": \"Action performed, e.g. ehr_accessed, lab_result_shared, appointment_booked\" },\n    \"patient_id\": { \"type\": \"string\" },\n    \"data_accessed\": { \"type\": \"string\", \"description\": \"Description of data accessed\" },\n    \"channel\": { \"type\": \"string\", \"description\": \"Channel: web, whatsapp, telegram, email\" }\n  },\n  \"required\": [\"action\", \"patient_id\"]\n}",
+          "func": "const baseUrl = $vars.EHR_API_BASE_URL || 'http://localhost:8080/api';\nconst apiKey  = $vars.EHR_API_KEY || 'dev-key';\n\ntry {\n  await fetch(`${baseUrl}/audit-log`, {\n    method: 'POST',\n    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      action, patient_id, data_accessed, channel,\n      timestamp: new Date().toISOString(),\n      agent: 'hospital-ai-chatbot-v1'\n    })\n  });\n  return `Audit log written: ${action} for patient ${patient_id}`;\n} catch (err) {\n  return `Audit log failed (non-blocking): ${err.message}`;\n}"
+        },
+        "outputAnchors": [{
+          "id": "tool_audit-output",
+          "name": "customTool",
+          "label": "Custom Tool",
+          "type": "CustomTool | Tool | StructuredTool"
+        }]
+      }
+    },
+
+    {
+      "id": "toolAgent_0",
+      "position": { "x": 1300, "y": 500 },
+      "type": "customNode",
+      "data": {
+        "id": "toolAgent_0",
+        "label": "Tool Calling Agent",
+        "name": "toolAgent",
+        "version": 2,
+        "type": "ToolAgent",
+        "baseClasses": ["ToolAgent", "AgentExecutor", "BaseChain"],
+        "category": "Agents",
+        "inputAnchors": [
+          { "label": "Tools",      "name": "tools",  "type": "Tool",            "list": true,  "id": "toolAgent_0-input-tools"  },
+          { "label": "Chat Model", "name": "model",  "type": "BaseChatModel",               "id": "toolAgent_0-input-model"  },
+          { "label": "Memory",     "name": "memory", "type": "BaseChatMemory",  "optional": true, "id": "toolAgent_0-input-memory" }
+        ],
+        "inputs": {
+          "systemMessage": "You are Aria, the AI health assistant for City General Hospital. You are kind, professional, and speak in plain language.\n\n## YOUR IDENTITY\n- You are an AI assistant, NOT a doctor. Always be transparent about this.\n- Begin every first interaction by saying: \"Hi, I'm Aria, City General Hospital's AI assistant. I can help with appointments, medical questions, test results, billing, and more. Please note: I'm an AI and not a substitute for professional medical advice.\"\n- You support multiple languages — respond in whatever language the patient uses.\n\n## TOOLS AVAILABLE\n- assess_symptoms: Triage and urgency assessment\n- manage_appointment: Book, reschedule, cancel, check slots\n- lookup_patient_ehr: Access medical history (ONLY after auth)\n- request_prescription_refill: Submit refill requests\n- check_billing_insurance: Billing and coverage queries\n- send_whatsapp_notification: Send WhatsApp confirmations\n- send_telegram_notification: Send Telegram confirmations\n- send_email_notification: Send email notifications\n- escalate_to_human: Hand off to live staff\n- write_audit_log: Write HIPAA audit log (call after any PHI access)\n\n## CRITICAL SAFETY RULES\n1. CRISIS FIRST: If the patient mentions chest pain, difficulty breathing, suicidal thoughts, severe bleeding, stroke symptoms, overdose, or any life-threatening emergency — immediately call assess_symptoms, get EMERGENCY result, then escalate_to_human with priority=emergency. Do NOT wait.\n2. ALWAYS include this disclaimer when discussing medical topics: \"I'm an AI assistant. Please consult a qualified healthcare professional for medical advice.\"\n3. NEVER diagnose. You can assess urgency and share general information only.\n4. NEVER share one patient's data with another.\n5. NEVER access EHR without confirmed patient authentication.\n6. ALWAYS call write_audit_log after accessing any PHI.\n7. ALWAYS confirm before sending any notification (WhatsApp, Telegram, email).\n8. Human handoff is ALWAYS available — never refuse it.\n\n## TRIAGE WORKFLOW\n1. Collect symptoms with empathy\n2. Ask about duration and severity (1 follow-up question at a time)\n3. Call assess_symptoms\n4. Return urgency clearly and guide to the right care setting\n5. Offer to book appointment if ROUTINE or URGENT\n\n## LANGUAGE & TONE\n- Plain language, no medical jargon unless patient uses it\n- Warm, reassuring, patient\n- Short responses — one topic at a time\n- Always end with an offer to help further or connect to staff\n\n## HARD LIMITS\n- Never provide specific drug dosages\n- Never interpret imaging or pathology results diagnostically\n- Never advise stopping a prescribed medication\n- Never make promises about treatment outcomes",
+          "maxIterations": 15,
+          "tools": [
+            "tool_triage", "tool_appointments", "tool_ehr",
+            "tool_prescription", "tool_billing",
+            "tool_whatsapp", "tool_telegram", "tool_email",
+            "tool_handoff", "tool_audit"
+          ],
+          "model": "chatOpenAI_0",
+          "memory": "bufferMemory_0"
+        },
+        "outputAnchors": [{
+          "id": "toolAgent_0-output",
+          "name": "toolAgent",
+          "label": "Tool Calling Agent",
+          "type": "ToolAgent | AgentExecutor | BaseChain"
+        }]
+      }
+    }
+
+  ],
+
+  "edges": [
+    { "source": "chatOpenAI_0",    "sourceHandle": "chatOpenAI_0-output",    "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-model",  "id": "e1" },
+    { "source": "bufferMemory_0",  "sourceHandle": "bufferMemory_0-output",  "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-memory", "id": "e2" },
+    { "source": "tool_triage",     "sourceHandle": "tool_triage-output",     "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e3" },
+    { "source": "tool_appointments","sourceHandle": "tool_appointments-output","target": "toolAgent_0","targetHandle": "toolAgent_0-input-tools",  "id": "e4" },
+    { "source": "tool_ehr",        "sourceHandle": "tool_ehr-output",        "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e5" },
+    { "source": "tool_prescription","sourceHandle": "tool_prescription-output","target":"toolAgent_0","targetHandle": "toolAgent_0-input-tools",  "id": "e6" },
+    { "source": "tool_billing",    "sourceHandle": "tool_billing-output",    "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e7" },
+    { "source": "tool_whatsapp",   "sourceHandle": "tool_whatsapp-output",   "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e8" },
+    { "source": "tool_telegram",   "sourceHandle": "tool_telegram-output",   "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e9" },
+    { "source": "tool_email",      "sourceHandle": "tool_email-output",      "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e10" },
+    { "source": "tool_handoff",    "sourceHandle": "tool_handoff-output",    "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e11" },
+    { "source": "tool_audit",      "sourceHandle": "tool_audit-output",      "target": "toolAgent_0", "targetHandle": "toolAgent_0-input-tools",  "id": "e12" }
+  ],
+
+  "metadata": {
+    "flowName": "Hospital AI Patient Chatbot — Aria",
+    "version": "1.0.0",
+    "created": "2026-03-13",
+    "priority": "patient-facing",
+    "channels": ["web-widget", "whatsapp", "telegram", "email"],
+    "llm": "gpt-4o",
+    "envVariablesRequired": [
+      "OPENAI_API_KEY",
+      "EHR_API_BASE_URL",
+      "EHR_API_KEY",
+      "TWILIO_ACCOUNT_SID",
+      "TWILIO_AUTH_TOKEN",
+      "TWILIO_WHATSAPP_FROM",
+      "TELEGRAM_BOT_TOKEN",
+      "SENDGRID_API_KEY",
+      "HOSPITAL_FROM_EMAIL"
+    ]
+  }
+}
