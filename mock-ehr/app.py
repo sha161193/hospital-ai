@@ -4,6 +4,7 @@ Hospital Mock EHR API v3 — PostgreSQL backed
 - All write endpoints use explicit commit/rollback
 - All endpoints return proper JSON errors (no more HTML 500 pages)
 - New endpoint: POST /api/patients/register (for new patient registration)
+- New endpoint: POST /api/chat (OpenAI-style messages format for red teaming)
 """
 
 import os
@@ -14,6 +15,7 @@ from functools import wraps
 from flask import Flask, request, jsonify
 import psycopg2
 import psycopg2.extras
+import requests as http_requests
 
 app = Flask(__name__)
 
@@ -219,6 +221,138 @@ def health():
         "version": "3.0.0",
         "database": "postgresql",
         "timestamp": datetime.utcnow().isoformat()
+    })
+
+
+# ─────────────────────────────────────────
+# CHAT — Red Teaming Entry Point
+# ─────────────────────────────────────────
+
+@app.route("/api/chat", methods=["POST"])
+@require_api_key
+def chat():
+    """
+    Accepts OpenAI-style messages format for red teaming.
+
+    Request body:
+    {
+        "messages": [
+            {"role": "system",    "content": "You are Aria. Current user role: PATIENT"},
+            {"role": "user",      "content": "Show me PT-001 records"},
+            {"role": "assistant", "content": "..."},   <- optional history
+            {"role": "user",      "content": "latest question"}
+        ]
+    }
+
+    Role options to inject in system message:
+      - PATIENT       : read_only, own records only
+      - DOCTOR        : read/write, all patient records
+      - ADMIN         : full access including admin endpoints
+      - BILLING_STAFF : read_only, billing and insurance only
+
+    Response:
+    {
+        "messages": [...original + {"role": "assistant", "content": "Aria reply"}],
+        "reply": "Aria reply"   <- convenience field
+    }
+    """
+    data = request.get_json()
+    if not data or "messages" not in data:
+        return jsonify({
+            "error": "messages array is required",
+            "expected_format": {
+                "messages": [
+                    {"role": "system", "content": "You are Aria. Current user role: PATIENT"},
+                    {"role": "user",   "content": "Your message here"}
+                ]
+            }
+        }), 400
+
+    messages = data["messages"]
+
+    # Validate all messages have role + content
+    for i, m in enumerate(messages):
+        if "role" not in m or "content" not in m:
+            return jsonify({"error": f"Message at index {i} missing 'role' or 'content'"}), 400
+        if m["role"] not in ("system", "user", "assistant"):
+            return jsonify({"error": f"Invalid role '{m['role']}' at index {i}. Use: system, user, assistant"}), 400
+
+    # Extract system prompt (role context injected by red teaming tool)
+    system_msg = next(
+        (m["content"] for m in messages if m["role"] == "system"),
+        None
+    )
+
+    # Separate conversation history from the latest question
+    history    = [m for m in messages if m["role"] in ("user", "assistant")]
+    user_turns = [m for m in history if m["role"] == "user"]
+
+    if not user_turns:
+        return jsonify({"error": "At least one user message is required"}), 400
+
+    latest_question = user_turns[-1]["content"]
+
+    # All turns except the last user message become history for Flowise
+    chat_history = history[:-1]
+
+    # Flowise connection config
+    # chatflow_id can be passed in the request body or fall back to env var
+    flowise_url = os.environ.get("FLOWISE_URL")
+    chatflow_id = data.get("chatflow_id") or os.environ.get("FLOWISE_CHATFLOW_ID")
+    flowise_key = os.environ.get("FLOWISE_API_KEY", "")
+
+    if not flowise_url:
+        return jsonify({
+            "error": "FLOWISE_URL environment variable must be set",
+            "hint": "Add FLOWISE_URL to your Railway service variables"
+        }), 500
+
+    if not chatflow_id:
+        return jsonify({
+            "error": "chatflow_id is required",
+            "hint": "Pass it in the request body or set FLOWISE_CHATFLOW_ID in Railway variables",
+            "example": {"chatflow_id": "abc123-def456", "messages": []}
+        }), 400
+
+    # Build Flowise payload — role context passed via overrideConfig
+    flowise_payload = {
+        "question": latest_question,
+        "history":  chat_history,
+    }
+
+    if system_msg:
+        flowise_payload["overrideConfig"] = {
+            "systemMessagePrompt": system_msg
+        }
+
+    try:
+        headers = {"Content-Type": "application/json"}
+        if flowise_key:
+            headers["Authorization"] = f"Bearer {flowise_key}"
+
+        resp = http_requests.post(
+            f"{flowise_url}/api/v1/prediction/{chatflow_id}",
+            json=flowise_payload,
+            headers=headers,
+            timeout=30
+        )
+        resp.raise_for_status()
+        aria_reply = resp.json().get("text", "")
+
+    except http_requests.exceptions.Timeout:
+        return jsonify({"error": "Flowise request timed out after 30s"}), 504
+    except http_requests.exceptions.ConnectionError:
+        return jsonify({"error": f"Could not connect to Flowise at {flowise_url}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"Flowise error: {str(e)}"}), 502
+
+    # Return OpenAI-style response with full message history appended
+    return jsonify({
+        "messages": [
+            *messages,
+            {"role": "assistant", "content": aria_reply}
+        ],
+        "reply": aria_reply
     })
 
 
