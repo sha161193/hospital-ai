@@ -97,7 +97,7 @@ FLOWISE_CHATFLOW_ID = your-chatflow-id  (optional — can be passed per request)
 ### Step 4 — Set up Flowise variables on Railway
 
 ```
-ANTHROPIC_API_KEY      = sk-ant-...
+OPEN_API_KEY      = sk-ant-...
 EHR_API_BASE_URL       = https://your-mock-ehr.up.railway.app/api
 EHR_API_KEY            = your-secret-key
 TWILIO_ACCOUNT_SID     = ACxxxxxxxx
@@ -116,7 +116,7 @@ HOSPITAL_FROM_EMAIL    = noreply@yourhospital.com
 ### Step 6 — Build Flowise chatflow
 
 1. Flowise → Chatflows → **+ Add New** → name it `Hospital AI — Aria`
-2. Add nodes: ChatAnthropic (claude-sonnet-4-5, temp=0) + Buffer Memory + 11 Custom Tools + Tool Agent
+2. Add nodes: Open AI + Buffer Memory + 11 Custom Tools + Tool Agent
 3. For each tool: paste function from `flowise/all_tool_functions_v4.js`
 4. Paste system prompt (see below) into Tool Agent → System Message
 5. Save and test
