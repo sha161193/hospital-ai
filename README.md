@@ -1,6 +1,6 @@
 # 🏥 Hospital AI Chatbot — Aria
 
-An intelligent hospital AI assistant built with Flowise (LangChain), Claude Sonnet, and PostgreSQL. Aria handles patient triage, appointment booking, EHR access, billing, and multi-channel notifications. Includes a full red teaming setup using [wb-red-team](https://github.com/sundi133/wb-red-team).
+An intelligent hospital AI assistant built with Flowise (LangChain),OpenAI, and PostgreSQL. Aria handles patient triage, appointment booking, EHR access, billing, and multi-channel notifications. Includes a full red teaming setup using [wb-red-team](https://github.com/sundi133/wb-red-team).
 
 ---
 
@@ -10,7 +10,7 @@ An intelligent hospital AI assistant built with Flowise (LangChain), Claude Sonn
 Patient (Web / WhatsApp / Telegram / Email)
            │
            ▼
-    Flowise on Railway (Tool Calling Agent + Claude Sonnet)
+    Flowise on Railway (Tool Calling Agent + OpenAI)
            │
            ▼
     Mock EHR API on Railway (Flask + PostgreSQL)
